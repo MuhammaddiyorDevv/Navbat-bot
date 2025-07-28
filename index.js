@@ -77,7 +77,7 @@ sections.forEach((section) => {
 
     const joinedAll = sections.every((s) => usersJoined[userId][s]);
     if (joinedAll) {
-      return ctx.editMessageText("Siz barcha bo‘limlarga qo‘shildingiz.");
+      return ctx.editMessageText("✅ Siz barcha bo‘limlarga qo‘shildingiz.");
     }
 
     return ctx.answerCbQuery(`${section} bo‘limiga qo‘shildingiz`);
@@ -100,18 +100,20 @@ sections.forEach((section) => {
     const queue = queues[section];
     const isUserTurn = queue.length > 0 && queue[0].id === userId;
 
+    const buttons = [
+      isUserTurn ? [{ text: "✅ Bajardim", callback_data: `DONE_${section}` }] : [],
+      [{ text: "❌ Chiqish", callback_data: `LEAVE_${section}` }],
+    ].filter((row) => row.length > 0);
+
     ctx.reply(getQueueText(section), {
       reply_markup: {
-        inline_keyboard: [
-          isUserTurn ? [{ text: "✅ Bajardim", callback_data: `DONE_${section}` }] : [],
-          [{ text: "❌ Chiqish", callback_data: `LEAVE_${section}` }],
-        ].filter((row) => row.length > 0),
+        inline_keyboard: buttons,
       },
     });
   });
 
-  // Bajardim
-  bot.action(`DONE_${section}`, (ctx) => {
+  // ✅ Bajardim — navbatni yangilaydi va yangi navbatdagiga eslatma yuboradi
+  bot.action(`DONE_${section}`, async (ctx) => {
     const userId = ctx.from.id;
     const queue = queues[section];
 
@@ -119,13 +121,27 @@ sections.forEach((section) => {
       const doneUser = queue.shift();
       queue.push(doneUser);
       saveData();
-      ctx.reply(`✅ @${doneUser.username} vazifani bajardi. Navbat yangilandi.`);
+
+      await ctx.reply(`✅ @${doneUser.username} vazifani bajardi. Navbat yangilandi.`);
+
+      // 🔔 Navbatdagi foydalanuvchiga eslatma
+      const nextUser = queue[0];
+      if (nextUser) {
+        try {
+          await bot.telegram.sendMessage(
+            nextUser.id,
+            `🔔 Hurmatli @${nextUser.username}, ${section} bo‘limidagi navbat sizga keldi!`
+          );
+        } catch (e) {
+          console.error(`@${nextUser.username} ga yuborib bo‘lmadi:`, e.message);
+        }
+      }
     } else {
-      ctx.answerCbQuery("Sizning navbatingiz emas!", { show_alert: true });
+      ctx.answerCbQuery("❌ Sizning navbatingiz emas!", { show_alert: true });
     }
   });
 
-  // Chiqish
+  // ❌ Chiqish
   bot.action(`LEAVE_${section}`, (ctx) => {
     const userId = ctx.from.id;
     const queue = queues[section];
