@@ -1,92 +1,82 @@
 {
-  "Ovqat": [
-    {
-      "id": 7605655949,
-      "username": "omukhammaddiyor"
-    },
-    {
-      "id": 8120745288,
-      "username": "Muhammaddiyor_aka"
-    },
-    {
-      "id": 7989334297,
-      "username": "muhammaddiyor_odiljonov"
-    },
-    {
-      "id": 1344592813,
-      "username": "Odiljonov_02"
-    }
-  ],
+  "Ovqat": [],
   "Musor": [
     {
-      "id": 7605655949,
-      "username": "omukhammaddiyor"
+      "id": 1753777382801,
+      "username": "qosimjon_1"
     },
     {
-      "id": 8120745288,
-      "username": "Muhammaddiyor_aka"
-    },
-    {
-      "id": 7989334297,
-      "username": "muhammaddiyor_odiljonov"
+      "id": 1753777410866,
+      "username": "Elon_Ryder7"
     },
     {
       "id": 1344592813,
       "username": "Odiljonov_02"
+    },
+    {
+      "id": 1753777429214,
+      "username": "gulomoov_1"
+    },
+    {
+      "id": 1753777445679,
+      "username": "djurayev_19"
+    },
+    {
+      "id": 1753777461246,
+      "username": "Asadullohbek"
     }
   ],
   "Gel": [
     {
-      "id": 7605655949,
-      "username": "omukhammaddiyor"
+      "id": 1753777155529,
+      "username": "qosimjon_1"
     },
     {
-      "id": 8120745288,
-      "username": "Muhammaddiyor_aka"
-    },
-    {
-      "id": 7989334297,
-      "username": "muhammaddiyor_odiljonov"
+      "id": 1753777182204,
+      "username": "gulomoov_1"
     },
     {
       "id": 1344592813,
       "username": "Odiljonov_02"
+    },
+    {
+      "id": 1753777236675,
+      "username": "Elon_Ryder7"
+    },
+    {
+      "id": 1753777281955,
+      "username": "djurayev_19"
+    },
+    {
+      "id": 1753777305084,
+      "username": "Asadullohbek"
     }
   ],
-  "Qog'oz": [
-    {
-      "id": 7605655949,
-      "username": "omukhammaddiyor"
-    },
-    {
-      "id": 8120745288,
-      "username": "Muhammaddiyor_aka"
-    },
-    {
-      "id": 7989334297,
-      "username": "muhammaddiyor_odiljonov"
-    },
-    {
-      "id": 1344592813,
-      "username": "Odiljonov_02"
-    }
-  ],
+  "Qog'oz": [],
   "Suv": [
     {
-      "id": 7605655949,
-      "username": "omukhammaddiyor"
+      "id": 1753777605320,
+      "username": "djurayev_19"
     },
     {
-      "id": 8120745288,
-      "username": "Muhammaddiyor_aka"
+      "id": 1753777618427,
+      "username": "gulomoov_1"
     },
     {
-      "id": 7989334297,
-      "username": "muhammaddiyor_odiljonov"
+      "id": 1753777636625,
+      "username": "qosimjon_1"
     },
     {
       "id": 1344592813,
       "username": "Odiljonov_02"
+    },
+    {
+      "id": 1753777662950,
+      "username": "Elon_Ryder7"
+    },
+    {
+      "id": 1753777679662,
+      "username": "Asadullohbek"
     }
   ]
 }
