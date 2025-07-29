@@ -97,8 +97,7 @@ sections.forEach((section) => {
     const isUserTurn = queues[section][0]?.id === userId;
 
     const buttons = [
-      isUserTurn ? [{ text: "✅ Bajardim", callback_data: `DONE_${section}` }] : [],
-      // ❌ Chiqish faqat admin tomonidan amalga oshiriladi
+      isUserTurn ? [{ text: "✅ Bajardim", callback_data: `DONE_${section}` }] : []
     ].filter((row) => row.length > 0);
 
     ctx.reply(getQueueText(section), {
@@ -127,7 +126,7 @@ sections.forEach((section) => {
   });
 });
 
-// Admin confirm qiladi
+// ADMIN: confirm
 bot.command("confirm", async (ctx) => {
   const userId = ctx.from.id;
   const [_, section] = ctx.message.text.split(" ");
@@ -141,20 +140,16 @@ bot.command("confirm", async (ctx) => {
 
   const doneUser = queue.shift();
   queue.push(doneUser);
-  saveData();
-
   delete pendingConfirmations[section];
   saveData();
 
   await ctx.reply(`✅ ${section} bo‘limida navbat yangilandi.`);
 
-  // Guruhga xabar
   await bot.telegram.sendMessage(
     GROUP_CHAT_ID,
     `✅ ${section} bo‘limida navbat yangilandi. @${doneUser.username} vazifani bajardi.`
   );
 
-  // Navbatdagi foydalanuvchiga eslatma
   const next = queue[0];
   if (next) {
     try {
@@ -168,33 +163,93 @@ bot.command("confirm", async (ctx) => {
   }
 });
 
-// Admin qo‘lda foydalanuvchini qo‘shadi
+// ADMIN: add user
 bot.command("adduser", (ctx) => {
-  const [_, username, section] = ctx.message.text.split(" ");
+  const [_, rawUsername, section] = ctx.message.text.split(" ");
   if (ctx.from.id !== ADMIN_ID) return;
 
-  if (!sections.includes(section)) return ctx.reply("❌ Noto‘g‘ri bo‘lim!");
+  if (!rawUsername || !section || !sections.includes(section)) {
+    return ctx.reply("❌ Format: /adduser @username Bo‘limNomi");
+  }
 
-  const user = { id: Date.now(), username }; // ID qo‘lda bo‘lsa tasodifiy beriladi
-  queues[section].push(user);
+  const username = rawUsername.replace("@", "");
+  const exists = queues[section].some((u) => u.username === username);
+  if (exists) return ctx.reply("⚠️ Bu user allaqachon ro'yxatda.");
+
+  const newUser = { id: Date.now(), username };
+  queues[section].push(newUser);
   saveData();
+
   ctx.reply(`✅ @${username} ${section} bo‘limiga qo‘shildi.`);
 });
 
-// Admin userni chiqaradi
+// ADMIN: remove user
 bot.command("removeuser", (ctx) => {
-  const [_, username, section] = ctx.message.text.split(" ");
+  const [_, rawUsername, section] = ctx.message.text.split(" ");
   if (ctx.from.id !== ADMIN_ID) return;
 
+  if (!rawUsername || !section || !sections.includes(section)) {
+    return ctx.reply("❌ Format: /removeuser @username Bo‘limNomi");
+  }
+
+  const username = rawUsername.replace("@", "");
   const index = queues[section]?.findIndex((u) => u.username === username);
+
   if (index !== -1) {
     queues[section].splice(index, 1);
     saveData();
     ctx.reply(`❌ @${username} ${section} bo‘limidan chiqarildi.`);
   } else {
-    ctx.reply("❌ Topilmadi.");
+    ctx.reply("❌ User topilmadi.");
   }
 });
+
+bot.command("resetall", (ctx) => {
+  if (ctx.from.id !== ADMIN_ID) return;
+
+  queues = {};
+  usersJoined = {};
+  pendingConfirmations = {};
+
+  sections.forEach((s) => {
+    queues[s] = [];
+  });
+
+  saveData();
+  ctx.reply("♻️ Barcha navbatlar va foydalanuvchi holatlari tozalandi.");
+});
+
+bot.command("status", (ctx) => {
+  if (ctx.from.id !== ADMIN_ID) return;
+
+  let message = "📊 Hozirgi navbatlar holati:\n\n";
+
+  sections.forEach((section) => {
+    const queue = queues[section];
+    if (!queue || queue.length === 0) {
+      message += `🔹 ${section}: Hech kim navbatda emas.\n`;
+    } else {
+      message += `🔹 ${section}:\n` + queue.map((u, i) => `${i === 0 ? "👉 " : "   "}@${u.username}`).join("\n") + "\n";
+    }
+  });
+
+  ctx.reply(message);
+});
+
+cron.schedule("0 8 * * *", () => {
+  let message = "📢 Har kungi navbat eslatmasi:\n\n";
+  sections.forEach((section) => {
+    const queue = queues[section];
+    if (!queue || queue.length === 0) {
+      message += `🔹 ${section}: Hech kim yo'q.\n`;
+    } else {
+      message += `🔹 ${section}: 👉 @${queue[0].username}\n`;
+    }
+  });
+
+  bot.telegram.sendMessage(GROUP_CHAT_ID, message);
+});
+
 
 bot.launch();
 console.log("🤖 Bot ishga tushdi!");
