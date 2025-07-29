@@ -5,36 +5,43 @@ const cron = require("node-cron");
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const ADMIN_ID = 1344592813;
-const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID;
+const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID; // .env faylga joylang
 
 const sections = ["Ovqat", "Musor", "Gel", "Qog'oz", "Suv"];
 let queues = {};
 let usersJoined = {};
-let pendingConfirmations = {};
+let pendingActions = {};
 
 function loadData() {
-  if (fs.existsSync("queues.json")) queues = JSON.parse(fs.readFileSync("queues.json"));
-  else sections.forEach((s) => (queues[s] = []));
+  if (fs.existsSync("queues.json")) {
+    queues = JSON.parse(fs.readFileSync("queues.json"));
+  } else {
+    sections.forEach((section) => (queues[section] = []));
+  }
 
-  if (fs.existsSync("users.json")) usersJoined = JSON.parse(fs.readFileSync("users.json"));
-  if (fs.existsSync("pending.json")) pendingConfirmations = JSON.parse(fs.readFileSync("pending.json"));
+  if (fs.existsSync("users.json")) {
+    usersJoined = JSON.parse(fs.readFileSync("users.json"));
+  }
 }
 
 function saveData() {
   fs.writeFileSync("queues.json", JSON.stringify(queues, null, 2));
   fs.writeFileSync("users.json", JSON.stringify(usersJoined, null, 2));
-  fs.writeFileSync("pending.json", JSON.stringify(pendingConfirmations, null, 2));
 }
 
 function getQueueText(section) {
   const queue = queues[section];
   if (!queue || queue.length === 0) return "Navbatda hech kim yo‘q.";
+
   return `📋 ${section} navbati:\n\n` + queue.map((u, i) => `${i === 0 ? "👉 " : ""}@${u.username}`).join("\n");
+}
+
+function getUser(username) {
+  return username.startsWith("@") ? username.slice(1) : username;
 }
 
 loadData();
 
-// START
 bot.start((ctx) => {
   const userId = ctx.from.id;
   const username = ctx.from.username || `user${userId}`;
@@ -45,7 +52,9 @@ bot.start((ctx) => {
     return ctx.reply(
       "Har bir bo‘limga navbatga qo‘shilishni istaysizmi?",
       Markup.inlineKeyboard(
-        sections.map((section) => Markup.button.callback(section, `JOIN_${section}`))
+        sections.map((section) =>
+          Markup.button.callback(section, `JOIN_${section}`)
+        )
       )
     );
   }
@@ -53,19 +62,21 @@ bot.start((ctx) => {
   return ctx.reply("Bo‘limlardan birini tanlang:", Markup.keyboard(sections).resize());
 });
 
-// JOIN SECTION
+// JOIN
 sections.forEach((section) => {
   bot.action(`JOIN_${section}`, (ctx) => {
     const userId = ctx.from.id;
     const username = ctx.from.username || `user${userId}`;
 
+    usersJoined[userId] = usersJoined[userId] || {};
+
     if (!usersJoined[userId][section]) {
       usersJoined[userId][section] = true;
 
-      const already = queues[section].some((u) => u.id === userId);
-      if (!already) queues[section].push({ id: userId, username });
-
-      saveData();
+      if (section === "Ovqat" || !queues[section].some((u) => u.id === userId)) {
+        queues[section].push({ id: userId, username });
+        saveData();
+      }
     }
 
     const joinedAll = sections.every((s) => usersJoined[userId][s]);
@@ -76,24 +87,23 @@ sections.forEach((section) => {
     return ctx.answerCbQuery(`${section} bo‘limiga qo‘shildingiz`);
   });
 
-  // VIEW QUEUE
   bot.hears(section, (ctx) => {
     const userId = ctx.from.id;
     const username = ctx.from.username || `user${userId}`;
+    usersJoined[userId] = usersJoined[userId] || {};
 
-    const already = queues[section].some((u) => u.id === userId);
-    if (!already) {
+    if (section === "Ovqat" || !queues[section].some((u) => u.id === userId)) {
       queues[section].push({ id: userId, username });
-      usersJoined[userId] = usersJoined[userId] || {};
       usersJoined[userId][section] = true;
       saveData();
     }
 
     const isUserTurn = queues[section][0]?.id === userId;
 
-    const buttons = isUserTurn
-      ? [[{ text: "✅ Bajardim", callback_data: `DONE_${section}` }]]
-      : [];
+    const buttons = [
+      isUserTurn ? [{ text: "✅ Bajardim", callback_data: `DONE_${section}` }] : [],
+      [{ text: "❌ Chiqish", callback_data: `LEAVE_${section}` }],
+    ].filter(row => row.length > 0);
 
     ctx.reply(getQueueText(section), {
       reply_markup: {
@@ -102,122 +112,118 @@ sections.forEach((section) => {
     });
   });
 
-  // DONE
+  // ✅ Bajardim
   bot.action(`DONE_${section}`, async (ctx) => {
     const userId = ctx.from.id;
-    const user = queues[section][0];
+    const username = ctx.from.username || `user${userId}`;
+    const queue = queues[section];
 
-    if (!user || user.id !== userId) {
+    if (queue[0]?.id !== userId) {
       return ctx.answerCbQuery("❌ Sizning navbatingiz emas!", { show_alert: true });
     }
 
-    pendingConfirmations[section] = user;
-    saveData();
-
-    await ctx.reply("✅ Admin tasdiqlaganidan so‘ng navbat yangilanadi.");
+    pendingActions[section] = { type: "done", user: queue[0] };
     await bot.telegram.sendMessage(
       ADMIN_ID,
-      `@${user.username} (${section}) bo‘limida 'Bajardim' bosdi.\nNavbatni almashtirish uchun: /confirm ${section}`
+      `🛠 @${username} ${section} bo‘limida "Bajardim" tugmasini bosdi.\nTasdiqlaysizmi?`,
+      Markup.inlineKeyboard([
+        [Markup.button.callback("✅ Tasdiqlayman", `CONFIRM_DONE_${section}`)],
+      ])
     );
+    await ctx.reply("⏳ Admin tasdiqlashini kuting...");
+  });
+
+  // ❌ Chiqish (faqat admin tasdiqlasa)
+  bot.action(`LEAVE_${section}`, async (ctx) => {
+    const userId = ctx.from.id;
+    const username = ctx.from.username || `user${userId}`;
+    pendingActions[`${userId}_${section}`] = { type: "leave", userId, username };
+
+    await bot.telegram.sendMessage(
+      ADMIN_ID,
+      `⚠️ @${username} ${section} bo‘limidan chiqmoqchi.\nTasdiqlaysizmi?`,
+      Markup.inlineKeyboard([
+        [Markup.button.callback("✅ Chiqishga ruxsat", `CONFIRM_LEAVE_${userId}_${section}`)],
+      ])
+    );
+    await ctx.reply("⏳ Admin tasdiqlashini kuting...");
   });
 });
 
-// CONFIRM
-bot.command("confirm", async (ctx) => {
-  if (ctx.from.id !== ADMIN_ID) return;
-  const [_, section] = ctx.message.text.split(" ");
-  if (!section || !pendingConfirmations[section]) return ctx.reply("❌ Tasdiqlash uchun navbat yo‘q.");
-
+// ✅ Admin tasdiqlari
+bot.action(/CONFIRM_DONE_(.+)/, async (ctx) => {
+  const section = ctx.match[1];
   const queue = queues[section];
+
+  if (queue.length === 0 || !pendingActions[section]) return;
+
   const doneUser = queue.shift();
   queue.push(doneUser);
-  delete pendingConfirmations[section];
+  delete pendingActions[section];
   saveData();
 
-  await ctx.reply(`✅ ${section} bo‘limida navbat yangilandi.`);
-
-  await bot.telegram.sendMessage(
-    GROUP_CHAT_ID,
-    `✅ ${section} bo‘limida navbat yangilandi.\n@${doneUser.username} vazifani bajardi.`
-  );
-
-  const next = queue[0];
-  if (next) {
-    try {
-      await bot.telegram.sendMessage(next.id, `🔔 @${next.username}, ${section} bo‘limida navbat sizga keldi!`);
-    } catch (e) {
-      console.error("❌ Foydalanuvchiga yuborib bo‘lmadi:", e.message);
-    }
+  await ctx.reply("✅ Navbat yangilandi.");
+  await bot.telegram.sendMessage(GROUP_CHAT_ID, `🔄 ${section} bo‘limida navbat yangilandi!`);
+  const nextUser = queue[0];
+  if (nextUser) {
+    await bot.telegram.sendMessage(nextUser.id, `🔔 ${section} bo‘limida navbat sizga keldi, @${nextUser.username}!`);
   }
 });
 
-// ADD USER
+bot.action(/CONFIRM_LEAVE_(\d+)_(.+)/, (ctx) => {
+  const userId = parseInt(ctx.match[1]);
+  const section = ctx.match[2];
+
+  const queue = queues[section];
+  const index = queue.findIndex((u) => u.id === userId);
+  if (index !== -1) queue.splice(index, 1);
+  if (usersJoined[userId]) usersJoined[userId][section] = false;
+
+  delete pendingActions[`${userId}_${section}`];
+  saveData();
+
+  ctx.reply(`✅ ${section} bo‘limidan chiqarildi.`);
+});
+
+// Admin: /adduser @username Section
 bot.command("adduser", (ctx) => {
   if (ctx.from.id !== ADMIN_ID) return;
-  const [_, rawUsername, section] = ctx.message.text.split(" ");
-  if (!rawUsername || !section || !sections.includes(section)) return ctx.reply("❌ Format: /adduser @username Bo‘lim");
+  const [_, username, section] = ctx.message.text.split(" ");
+  if (!sections.includes(section)) return ctx.reply("❌ Bo‘lim noto‘g‘ri!");
 
-  const username = rawUsername.replace("@", "");
-  const exists = queues[section].some((u) => u.username === username);
-  if (exists) return ctx.reply("⚠️ Bu user ro‘yxatda bor.");
-
-  queues[section].push({ id: Date.now(), username });
+  const clean = getUser(username);
+  const id = Math.floor(Math.random() * 1e10); // dummy ID
+  queues[section].push({ id, username: clean });
   saveData();
-  ctx.reply(`✅ @${username} ${section} bo‘limiga qo‘shildi.`);
+
+  ctx.reply(`✅ @${clean} ${section} bo‘limiga qo‘shildi.`);
 });
 
-// REMOVE USER
+// Admin: /removeuser @username Section
 bot.command("removeuser", (ctx) => {
   if (ctx.from.id !== ADMIN_ID) return;
-  const [_, rawUsername, section] = ctx.message.text.split(" ");
-  if (!rawUsername || !section || !sections.includes(section)) return ctx.reply("❌ Format: /removeuser @username Bo‘lim");
+  const [_, username, section] = ctx.message.text.split(" ");
+  if (!sections.includes(section)) return ctx.reply("❌ Bo‘lim noto‘g‘ri!");
 
-  const username = rawUsername.replace("@", "");
-  const index = queues[section].findIndex((u) => u.username === username);
-
-  if (index !== -1) {
-    queues[section].splice(index, 1);
-    saveData();
-    ctx.reply(`❌ @${username} ${section} bo‘limidan chiqarildi.`);
-  } else {
-    ctx.reply("❌ User topilmadi.");
-  }
-});
-
-// STATUS
-bot.command("status", (ctx) => {
-  if (ctx.from.id !== ADMIN_ID) return;
-
-  let message = "📊 Hozirgi navbatlar:\n\n";
-  sections.forEach((section) => {
-    const q = queues[section];
-    message += `🔹 ${section}:\n` + (q.length ? q.map((u, i) => `${i === 0 ? "👉" : "   "} @${u.username}`).join("\n") : "   Hech kim yo‘q") + "\n\n";
-  });
-
-  ctx.reply(message);
-});
-
-// RESET
-bot.command("resetall", (ctx) => {
-  if (ctx.from.id !== ADMIN_ID) return;
-
-  queues = {};
-  usersJoined = {};
-  pendingConfirmations = {};
-  sections.forEach((s) => (queues[s] = []));
+  const clean = getUser(username);
+  queues[section] = queues[section].filter((u) => u.username !== clean);
   saveData();
 
-  ctx.reply("♻️ Barcha navbatlar va holatlar tozalandi.");
+  ctx.reply(`❌ @${clean} ${section} bo‘limidan olib tashlandi.`);
 });
 
-// CRON JOB (optional: eslatmalar har kuni soat 9:00 da)
-cron.schedule("0 9 * * *", () => {
-  sections.forEach((section) => {
-    const user = queues[section]?.[0];
-    if (user) {
-      bot.telegram.sendMessage(user.id, `📢 Eslatma: Bugun ${section} navbati sizda.`);
+// Cron bilan eslatma (har kuni 10:00 da)
+cron.schedule("0 10 * * *", () => {
+  for (const section of sections) {
+    const queue = queues[section];
+    if (queue.length > 0) {
+      const user = queue[0];
+      bot.telegram.sendMessage(
+        user.id,
+        `🕙 Esingizda bo‘lsin, bugun ${section} navbat sizga tegishli!`
+      );
     }
-  });
+  }
 });
 
 bot.launch();
